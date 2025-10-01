@@ -1,0 +1,6 @@
+summary: test python 3.13 with 25.04 base - https get
+
+execute: |
+  docker run --rm -v "$PWD/src":/src:ro python:3.13-25.04 \
+    exec -IT python3 /src/main.py | \
+    grep "200 OK"

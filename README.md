@@ -13,4 +13,4 @@ repository.
 * [Python 3.10 (Ubuntu 22.04)](./python/3.10-22.04/rockcraft.yaml)
 * [Python 3.11 (Ubuntu 22.04)](./python/3.11-22.04/rockcraft.yaml)
 * [Python 3.12 (Ubuntu 24.04)](./python/3.12-24.04/rockcraft.yaml)
-* [Python 3.13 (Ubuntu 24.04)](./python/3.13-24.04/rockcraft.yaml)
+* [Python 3.13 (Ubuntu 25.04)](./python/3.13-25.04/rockcraft.yaml)
