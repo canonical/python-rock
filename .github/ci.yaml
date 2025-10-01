@@ -1,0 +1,4 @@
+version: 1
+ghcr:
+  upload: true
+  continuous-security-scanning: false

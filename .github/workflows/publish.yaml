@@ -1,0 +1,117 @@
+name: Build and Publish Rocks to GHCR
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+
+  tag-rocks:
+    uses: ./.github/workflows/tag-rocks.yaml
+
+
+  get-runners:
+    runs-on: ubuntu-latest
+    outputs:
+      arch-map: ${{ steps.set-map.outputs.arch-map }}
+    steps:
+      - id: set-map
+        run: |
+          if [[ "${{ github.repository_owner }}" == "canonical" ]]; then
+            echo 'arch-map={"amd64":["noble","X64","large"],"arm64":["noble","ARM64","large"]}' >> $GITHUB_OUTPUT
+          else
+            echo 'arch-map={"amd64":["ubuntu-24.04"],"arm64":["ubuntu-24.04-arm"]}' >> $GITHUB_OUTPUT
+          fi
+  
+  read-config:
+    runs-on: ubuntu-latest
+    outputs:
+      ghcr_upload: ${{ steps.read-config.outputs.ghcr_upload }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Read .github/ci.yaml with yq
+        id: read-config
+        run: |
+          value=$(yq '.ghcr.upload' .github/ci.yaml)
+          echo "ghcr_upload=${value}" >> $GITHUB_OUTPUT
+
+          
+  # Why do we need this duplicate job and reusable Build-Rock workflow?
+  # - the Build-Rock wf may need an an environment setup that relies on an internal action
+  #   - to call an internal action, the repo must also be internal/private
+  #     - but the OCI Factory is not internal/private, so that internal action cannot be called from there
+  build-internal:
+    needs: [get-runners, tag-rocks]
+    if: github.event.repository.visibility != 'public'
+    strategy:
+      matrix:
+        rock: ${{ fromJSON(needs.tag-rocks.outputs.json_result) }}
+    uses: canonical/oci-factory-internal/.github/workflows/Build-Rock.yaml@main
+    with:
+      rock-repo: ${{ github.repository }}
+      rock-repo-commit: ${{ github.ref }}
+      rockfile-directory: ${{ matrix.rock.location }}
+      oci-archive-name: ${{ matrix.rock.name }}_${{ matrix.rock.tag }}
+      arch-map: ${{ needs.get-runners.outputs.arch-map }}
+    secrets:
+      host-github-token: ${{ secrets.GITHUB_TOKEN }}
+      source-github-token: ${{ secrets.REPO_CLONER_TOKEN }}
+
+
+  build:
+    needs: [get-runners, tag-rocks]
+    if: github.event.repository.visibility == 'public'
+    strategy:
+      matrix:
+        rock: ${{ fromJSON(needs.tag-rocks.outputs.json_result) }}
+    uses: canonical/oci-factory/.github/workflows/Build-Rock.yaml@main
+    with:
+      rock-repo: ${{ github.repository }}
+      rock-repo-commit: ${{ github.head_ref || github.ref_name }}
+      rockfile-directory: ${{ matrix.rock.location }}
+      oci-archive-name: ${{ matrix.rock.name }}_${{ matrix.rock.tag }}
+      arch-map: ${{ needs.get-runners.outputs.arch-map }}
+      rockcraft-test: ${{ matrix.rock.test }}
+
+  test:
+    needs: [tag-rocks, build, build-internal]
+    if: |
+      always() && needs.tag-rocks.result == 'success' &&
+      (needs.build-internal.result == 'success' && needs.build.result == 'skipped') ||
+      (needs.build-internal.result == 'skipped' && needs.build.result == 'success')
+    strategy:
+      matrix:
+        rock: ${{ fromJSON(needs.tag-rocks.outputs.json_result) }}
+    uses: canonical/oci-factory/.github/workflows/Test-Rock.yaml@main
+    with:
+      oci-archive-name: ${{ matrix.rock.name }}_${{ matrix.rock.tag }}
+    secrets:
+      host-github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  upload:
+    needs: [tag-rocks, test, read-config]
+    if: |
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      needs.read-config.outputs.ghcr_upload == 'true'
+    strategy:
+      matrix:
+        rock: ${{ fromJSON(needs.tag-rocks.outputs.json_result) }}
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Upload Rock to GHCR
+        uses: canonical/oci-factory/.github/actions/upload-rock@main
+        with:
+          artifact_name: ${{ matrix.rock.name }}_${{ matrix.rock.tag }}
+          tags: ${{ matrix.rock.tag }}
+          name: ${{ github.repository }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
