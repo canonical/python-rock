@@ -1,0 +1,7 @@
+summary: test python 3.8 with 20.04 base - hello world
+
+execute: |
+  docker run --rm -v "$PWD/src":/src:ro python:3.8-20.04 \
+    exec -IT python3 /src/main.py | \
+    grep "Hello World"
+
