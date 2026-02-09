@@ -35,3 +35,9 @@ parts:
           libgcc-s1_libs \
           openssl_config \
           python3_standard
+
+  non-root-user:
+    plugin: nil
+    override-prime: |
+      craftctl default
+      install -d -o 584792 -g 584792 -m 770 run tmp

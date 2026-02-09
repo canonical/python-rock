@@ -35,3 +35,9 @@ parts:
     override-prime: |
       craftctl default
       ln -s /usr/bin/python3.11 $CRAFT_PRIME/usr/bin/python3
+
+  non-root-user:
+    plugin: nil
+    override-prime: |
+      craftctl default
+      install -d -o 584792 -g 584792 -m 770 run tmp
