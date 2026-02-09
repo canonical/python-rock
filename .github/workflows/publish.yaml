@@ -48,7 +48,7 @@ jobs:
         rock: ${{ fromJSON(needs.tag-rocks.outputs.json_result) }}
     uses: canonical/oci-factory/.github/workflows/Build-Rock.yaml@main
     with:
-      rock-repo: ${{ github.repository }}
+      rock-repo: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       rock-repo-commit: ${{ github.head_ref || github.ref_name }}
       rockfile-directory: ${{ matrix.rock.location }}
       oci-archive-name: ${{ matrix.rock.name }}_${{ matrix.rock.tag }}
