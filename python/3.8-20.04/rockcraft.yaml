@@ -2,8 +2,8 @@ name: python
 version: "3.8"
 summary: Chiselled Python 3.8 rock
 description: |
-    Python is an interpreted, interactive, object-oriented, open-source
-    programming language.
+  Python is an interpreted, interactive, object-oriented, open-source
+  programming language.
 license: Python-2.0
 base: bare
 build-base: ubuntu@20.04
@@ -11,25 +11,25 @@ build-base: ubuntu@20.04
 run-user: _daemon_
 
 platforms:
-    amd64:
-    arm64:
+  amd64:
+  arm64:
 
 parts:
-    python3:
-        plugin: nil
-        stage-packages:
-            - base-files_base
-            - base-files_release-info
-            - base-files_chisel
-            - libgcc-s1_libs
-            - libc6_libs
-            - openssl_config
-            - ca-certificates_data
-            - ncurses-base_xterm
-            - python3.8_standard
-        override-prime: |
-            craftctl default
-            ln -s /usr/bin/python3.8 $CRAFT_PRIME/usr/bin/python3
+  python3:
+    plugin: nil
+    stage-packages:
+      - base-files_base
+      - base-files_release-info
+      - base-files_chisel
+      - libgcc-s1_libs
+      - libc6_libs
+      - openssl_config
+      - ca-certificates_data
+      - ncurses-base_xterm
+      - python3.8_standard
+    override-prime: |
+      craftctl default
+      ln -s /usr/bin/python3.8 $CRAFT_PRIME/usr/bin/python3
 
   non-root-user:
     plugin: nil
