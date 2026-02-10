@@ -37,6 +37,8 @@ parts:
           python3_standard
 
   non-root-user:
+    after:
+      - python3
     plugin: nil
     override-prime: |
       craftctl default

@@ -32,6 +32,8 @@ parts:
       ln -s /usr/bin/python3.8 $CRAFT_PRIME/usr/bin/python3
 
   non-root-user:
+    after:
+      - python3
     plugin: nil
     override-prime: |
       craftctl default
