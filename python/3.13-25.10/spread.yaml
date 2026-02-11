@@ -22,10 +22,10 @@ suites:
       sudo apt remove --yes retry
 
       # Load the rock into docker
-      sudo rockcraft.skopeo --insecure-policy copy "oci-archive:$CRAFT_ARTIFACT" docker-daemon:python:3.13-25.04
+      sudo rockcraft.skopeo --insecure-policy copy "oci-archive:$CRAFT_ARTIFACT" docker-daemon:python:3.13-25.10
 
     restore: |
-      docker image rm --force python:3.13-25.04
+      docker image rm --force python:3.13-25.10
 
 exclude:
   - .git

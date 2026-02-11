@@ -13,7 +13,7 @@ description: |
 license: Python-2.0
 base: bare
 # TODO: Update to 25.04 when available
-build-base: ubuntu@24.04
+build-base: ubuntu@25.10
 
 run-user: _daemon_
 
@@ -24,14 +24,12 @@ platforms:
 parts:
   python3:
     plugin: nil
-    override-build: |
-      chisel cut --release ubuntu-25.04 \
-          --root $CRAFT_PART_INSTALL \
-          base-files_base \
-          base-files_release-info \
-          base-files_chisel \
-          ca-certificates_data \
-          libc6_libs \
-          libgcc-s1_libs \
-          openssl_config \
-          python3_standard
+    stage-packages:
+      - base-files_base
+      - base-files_release-info 
+      - base-files_chisel 
+      - ca-certificates_data 
+      - libc6_libs 
+      - libgcc-s1_libs 
+      - openssl_config 
+      - python3_standard
