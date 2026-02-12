@@ -12,7 +12,6 @@ description: |
   and its standard libraries.
 license: Python-2.0
 base: bare
-# TODO: Update to 25.04 when available
 build-base: ubuntu@25.10
 
 run-user: _daemon_
