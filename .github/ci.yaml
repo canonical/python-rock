@@ -1,4 +1,31 @@
 version: 1
 ghcr:
   upload: true
-  continuous-security-scanning: false
+  cve-scan: true
+
+registries:
+  ## Example of specifying registries
+  # docker.io:
+  #   uri: docker.io/ubuntu
+  #   auth:
+  #     - method: basic
+  #       config:
+  #         username: secrets.DOCKERHUB_USERNAME          # @@@@@@ DO NOT PUT ACTUAL CREDENTIALS HERE @@@@@@
+  #         password: secrets.DOCKERHUB_TOKEN             # @@@@@@ DO NOT PUT ACTUAL CREDENTIALS HERE @@@@@@
+  # rocksdev-ecr-public:
+  #   uri: public.ecr.aws/rocksdev
+  #   auth:
+  #     - method: ecr-public
+  #       config:
+  #         region: us-east-1
+  #         username: secrets.AWS_ACCESS_KEY_ID           # @@@@@@ DO NOT PUT ACTUAL CREDENTIALS HERE @@@@@@
+  #         password: secrets.AWS_SECRET_ACCESS_KEY       # @@@@@@ DO NOT PUT ACTUAL CREDENTIALS HERE @@@@@@
+
+images:
+  - directory: "*"
+
+  ## Example of specifying different registries for a specific rock
+  # - directory: "my-rock-name/0.1-24.04"
+  #   registries:
+  #     - docker.io
+  #     - rocksdev-ecr-public
