@@ -23,7 +23,6 @@ registries:
 
 images:
   - directory: "python/3.10-22.04"
-  - directory: "python/3.11-22.04"
   - directory: "python/3.12-24.04"
 
   ## Example of specifying different registries for a specific rock
