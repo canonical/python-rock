@@ -22,7 +22,9 @@ registries:
   #         password: secrets.AWS_SECRET_ACCESS_KEY       # @@@@@@ DO NOT PUT ACTUAL CREDENTIALS HERE @@@@@@
 
 images:
-  - directory: "*"
+  - directory: "3.10-22.04"
+  - directory: "3.11-22.04"
+  - directory: "3.12-24.04"
 
   ## Example of specifying different registries for a specific rock
   # - directory: "my-rock-name/0.1-24.04"
