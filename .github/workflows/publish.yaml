@@ -9,9 +9,20 @@ on:
 
 jobs:
 
-  tag-rocks:
-    uses: ./.github/workflows/tag-rocks.yaml
+  read-config:
+    runs-on: ubuntu-latest
+    outputs:
+      ghcr-upload: ${{ steps.read-ci-config.outputs.ghcr-upload }}
+      ghcr-cve-scan: ${{ steps.read-ci-config.outputs.ghcr-cve-scan }}
+      build-matrix: ${{ steps.read-ci-config.outputs.build-matrix }}
+      upload-matrix: ${{ steps.read-ci-config.outputs.upload-matrix }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
 
+      - name: Read .github/ci.yaml
+        id: read-ci-config
+        uses: canonical/rocks-template-actions/actions/read-ci-config@v1
 
   get-runners:
     runs-on: ubuntu-latest
@@ -25,56 +36,69 @@ jobs:
           else
             echo 'arch-map={"amd64":["ubuntu-24.04"],"arm64":["ubuntu-24.04-arm"]}' >> $GITHUB_OUTPUT
           fi
-  
-  read-config:
-    runs-on: ubuntu-latest
-    outputs:
-      ghcr_upload: ${{ steps.read-config.outputs.ghcr_upload }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
 
-      - name: Read .github/ci.yaml with yq
-        id: read-config
-        run: |
-          value=$(yq '.ghcr.upload' .github/ci.yaml)
-          echo "ghcr_upload=${value}" >> $GITHUB_OUTPUT
+  # Why do we need this duplicate job and reusable Build-Rock workflow?
+  # - the Build-Rock wf may need an an environment setup that relies on an internal action
+  #   - to call an internal action, the repo must also be internal/private
+  #     - but the OCI Factory is not internal/private, so that internal action cannot be called from there
+  # build-internal:
+  #   needs: [get-runners, read-config]
+  #   if: github.event.repository.visibility != 'public'
+  #   strategy:
+  #     fail-fast: true
+  #     matrix: ${{ fromJSON(needs.read-config.outputs.build-matrix) }}
+  #   uses: canonical/oci-factory-internal/.github/workflows/Build-Rock.yaml@main
+  #   with:
+  #     rock-repo: ${{ github.repository }}
+  #     rock-repo-commit: ${{ github.ref }}
+  #     rockfile-directory: ${{ matrix.directory }}
+  #     oci-archive-name: ${{ matrix.artifact-name }}
+  #     arch-map: ${{ needs.get-runners.outputs.arch-map }}
+  #   secrets:
+  #     host-github-token: ${{ secrets.GITHUB_TOKEN }}
+  #     source-github-token: ${{ secrets.REPO_CLONER_TOKEN }}
 
   build:
-    needs: [get-runners, tag-rocks]
+    needs: [get-runners, read-config]
     if: github.event.repository.visibility == 'public'
     strategy:
-      matrix:
-        rock: ${{ fromJSON(needs.tag-rocks.outputs.json_result) }}
+      matrix: ${{ fromJSON(needs.read-config.outputs.build-matrix) }}
     uses: canonical/oci-factory/.github/workflows/Build-Rock.yaml@main
     with:
       rock-repo: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       rock-repo-commit: ${{ github.head_ref || github.ref_name }}
-      rockfile-directory: ${{ matrix.rock.location }}
-      oci-archive-name: ${{ matrix.rock.name }}_${{ matrix.rock.tag }}
+      rockfile-directory: ${{ matrix.directory }}
+      oci-archive-name: ${{ matrix.artifact-name }}
       arch-map: ${{ needs.get-runners.outputs.arch-map }}
-      rockcraft-test: ${{ matrix.rock.test }}
+      rockcraft-test: ${{ matrix.run-tests }}
 
   test:
-    needs: [tag-rocks, build]
+    needs: [read-config, build]
+    # Uncomment these lines if using build-internal job and remove the line above
+    # needs: [read-config, build, build-internal] 
+    # if: |
+    #   always() && needs.read-config.result == 'success' &&
+    #   (needs.build-internal.result == 'success' && needs.build.result == 'skipped') ||
+    #   (needs.build-internal.result == 'skipped' && needs.build.result == 'success')
     strategy:
-      matrix:
-        rock: ${{ fromJSON(needs.tag-rocks.outputs.json_result) }}
+      fail-fast: false
+      matrix: ${{ fromJson(needs.read-config.outputs.build-matrix) }}
     uses: canonical/oci-factory/.github/workflows/Test-Rock.yaml@main
     with:
-      oci-archive-name: ${{ matrix.rock.name }}_${{ matrix.rock.tag }}
-    secrets:
-      host-github-token: ${{ secrets.GITHUB_TOKEN }}
+      oci-archive-name: ${{ matrix.artifact-name }}
 
-  upload:
-    needs: [tag-rocks, test, read-config]
+  upload-ghcr:
+    needs: [read-config, test]
+    # Note: the !cancelled() is required to workaround the job being skipped
+    # due to a skipped job in the indirect dependency chain:
+    # https://github.com/orgs/community/discussions/25224
     if: |
-      github.event_name == 'push' &&
+      github.event_name != 'pull_request' && !cancelled() && !failure() &&
       github.ref == 'refs/heads/main' &&
-      needs.read-config.outputs.ghcr_upload == 'true'
+      needs.read-config.outputs.ghcr-upload == 'true'
     strategy:
-      matrix:
-        rock: ${{ fromJSON(needs.tag-rocks.outputs.json_result) }}
+      matrix: ${{ fromJSON(needs.read-config.outputs.build-matrix) }}
+      fail-fast: false
     runs-on: ubuntu-latest
     permissions:
       packages: write
@@ -82,9 +106,60 @@ jobs:
       - name: Upload Rock to GHCR
         uses: canonical/oci-factory/.github/actions/upload-rock@main
         with:
-          artifact_name: ${{ matrix.rock.name }}_${{ matrix.rock.tag }}
-          tags: ${{ matrix.rock.tag }}
-          name: ${{ github.repository }}
-          registry: ghcr.io
+          artifact_name: ${{ matrix.artifact-name }}
+          tags: ${{ matrix.tag }}
+          name: ${{ matrix.name }}
+          registry: ghcr.io/${{ github.repository }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+  upload-registries:
+    needs: [read-config, test]
+    # Note: the !cancelled() is required to workaround the job being skipped
+    # due to a skipped job in the indirect dependency chain:
+    # https://github.com/orgs/community/discussions/25224
+    if: |
+      github.event_name != 'pull_request' && !cancelled() && !failure() &&
+      github.ref == 'refs/heads/main' &&
+      needs.read-config.outputs.upload-matrix != '{"include": []}'
+    strategy:
+      matrix: ${{ fromJSON(needs.read-config.outputs.upload-matrix) }}
+      fail-fast: false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare ECR Session Token
+        if: ${{ contains(matrix.registry-auth-method, 'ecr') }}
+        id: get-ecr-token
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets[matrix.registry-auth-username] }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets[matrix.registry-auth-password] }}
+        run: |
+          session_token=$(aws ${{ matrix.registry-auth-method }} \
+                          get-login-password \
+                          --region ${{ matrix.registry-auth-region }} \
+                          )
+          echo "::add-mask::$session_token"
+          echo "aws-session-token=$session_token" >> $GITHUB_OUTPUT
+
+      - name: Upload Rock to ECR
+        uses: canonical/oci-factory/.github/actions/upload-rock@main
+        if: ${{ contains(matrix.registry-auth-method, 'ecr') }}
+        with:
+          artifact_name: ${{ matrix.artifact-name }}
+          tags: ${{ matrix.tag }}
+          name: ${{ matrix.name }}
+          registry: ${{ matrix.registry-uri }}
+          username: AWS
+          password: ${{ steps.get-ecr-token.outputs.aws-session-token }}
+
+      - name: Upload Rock to Registry
+        uses: canonical/oci-factory/.github/actions/upload-rock@main
+        if: matrix.registry-auth-method == 'basic'
+        with:
+          artifact_name: ${{ matrix.artifact-name }}
+          tags: ${{ matrix.tag }}
+          name: ${{ matrix.name }}
+          registry: ${{ matrix.registry-uri }}
+          username: ${{ secrets[matrix.registry-auth-username] }}
+          password: ${{ secrets[matrix.registry-auth-password] }}
+
