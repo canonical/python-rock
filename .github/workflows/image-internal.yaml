@@ -1,0 +1,137 @@
+# This workflow is intended for internal Canonical repositories only. 
+# It includes steps that rely on internal actions or secrets, 
+# and it performs additional checks to prevent accidental usage in public repositories. 
+# If you are working in a public repository, please use the .github/workflows/image.yaml workflow instead.
+#
+name: Build and Publish Rocks (Internal)
+
+on:
+  # Uncomment these lines to enable the workflow on push and pull_request events
+  # push:
+  #   branches: [main]
+  # pull_request:
+  #   branches: [main]
+  workflow_dispatch:
+
+jobs:
+
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      ghcr-upload: ${{ steps.read-ci-config.outputs.ghcr-upload }}
+      build-matrix: ${{ steps.read-ci-config.outputs.build-matrix }}
+      upload-matrix: ${{ steps.read-ci-config.outputs.upload-matrix }}
+    steps:
+      - name: Pre-Check
+        if: |
+          github.repository_owner != 'canonical' ||
+          github.event.repository.visibility == 'public'
+        run: |
+          echo "::error::This workflow is intended for internal repositories only. Please use the .github/workflows/image.yaml workflow instead."
+          exit 1
+
+      - name: Checkout Repository
+        uses: actions/checkout@v5
+
+      - name: Read .github/ci.yaml
+        id: read-ci-config
+        uses: canonical/rocks-template-actions/actions/read-ci-config@v1
+
+
+  build-internal:
+    needs: [prepare]
+    strategy:
+      fail-fast: true
+      matrix: ${{ fromJSON(needs.prepare.outputs.build-matrix) }}
+    uses: canonical/oci-factory-internal/.github/workflows/Build-Rock.yaml@main
+    with:
+      rock-repo: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      rock-repo-commit: ${{ github.ref }}
+      rockfile-directory: ${{ matrix.directory }}
+      oci-archive-name: ${{ matrix.artifact-name }}
+    secrets:
+      host-github-token: ${{ secrets.GITHUB_TOKEN }}
+      source-github-token: ${{ secrets.REPO_CLONER_TOKEN }}
+
+
+  test:
+    needs: [prepare, build-internal]
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.prepare.outputs.build-matrix) }}
+    uses: canonical/oci-factory/.github/workflows/Test-Rock.yaml@main
+    with:
+      oci-archive-name: ${{ matrix.artifact-name }}
+
+
+  upload-ghcr:
+    needs: [prepare, test]
+    runs-on: ubuntu-latest
+    if: |
+      needs.prepare.outputs.ghcr-upload == 'true' &&
+      github.event_name != 'pull_request' && 
+      github.ref == 'refs/heads/main'
+    strategy:
+      matrix: ${{ fromJSON(needs.prepare.outputs.build-matrix) }}
+      fail-fast: false
+    permissions:
+      packages: write
+    steps:
+      - name: Upload Rock to GHCR
+        uses: canonical/oci-factory/.github/actions/upload-rock@main
+        with:
+          artifact_name: ${{ matrix.artifact-name }}
+          tags: ${{ matrix.tag }}
+          name: ${{ matrix.name }}
+          registry: ghcr.io/${{ github.repository }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+
+  upload-registries:
+    needs: [prepare, test]
+    runs-on: ubuntu-latest
+    if: |
+      needs.prepare.outputs.upload-matrix != '{"include": []}' &&
+      github.event_name != 'pull_request' && 
+      github.ref == 'refs/heads/main'
+    strategy:
+      matrix: ${{ fromJSON(needs.prepare.outputs.upload-matrix) }}
+      fail-fast: false
+    steps:
+      - name: Prepare ECR Session Token
+        if: ${{ contains(matrix.registry-auth-method, 'ecr') }}
+        id: get-ecr-token
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets[matrix.registry-auth-username] }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets[matrix.registry-auth-password] }}
+        run: |
+          session_token=$(aws ${{ matrix.registry-auth-method }} \
+                          get-login-password \
+                          --region ${{ matrix.registry-auth-region }} \
+                          )
+          echo "::add-mask::$session_token"
+          echo "aws-session-token=$session_token" >> $GITHUB_OUTPUT
+
+      - name: Upload Rock to ECR
+        uses: canonical/oci-factory/.github/actions/upload-rock@main
+        if: ${{ contains(matrix.registry-auth-method, 'ecr') }}
+        with:
+          artifact_name: ${{ matrix.artifact-name }}
+          tags: ${{ matrix.tag }}
+          name: ${{ matrix.name }}
+          registry: ${{ matrix.registry-uri }}
+          username: AWS
+          password: ${{ steps.get-ecr-token.outputs.aws-session-token }}
+
+      - name: Upload Rock to Registry
+        uses: canonical/oci-factory/.github/actions/upload-rock@main
+        if: matrix.registry-auth-method == 'basic'
+        with:
+          artifact_name: ${{ matrix.artifact-name }}
+          tags: ${{ matrix.tag }}
+          name: ${{ matrix.name }}
+          registry: ${{ matrix.registry-uri }}
+          username: ${{ secrets[matrix.registry-auth-username] }}
+          password: ${{ secrets[matrix.registry-auth-password] }}
+
