@@ -1,4 +1,4 @@
-name: Build and Publish Rocks to GHCR
+name: Build and Publish Rocks
 
 on:
   push:
@@ -8,102 +8,97 @@ on:
   workflow_dispatch:
 
 jobs:
-
-  read-config:
+  prepare:
     runs-on: ubuntu-latest
     outputs:
       ghcr-upload: ${{ steps.read-ci-config.outputs.ghcr-upload }}
-      ghcr-cve-scan: ${{ steps.read-ci-config.outputs.ghcr-cve-scan }}
       build-matrix: ${{ steps.read-ci-config.outputs.build-matrix }}
       upload-matrix: ${{ steps.read-ci-config.outputs.upload-matrix }}
+      arch-map: ${{ steps.set-map.outputs.arch-map }}
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v5
 
       - name: Read .github/ci.yaml
         id: read-ci-config
         uses: canonical/rocks-template-actions/actions/read-ci-config@v1
 
-  get-runners:
-    runs-on: ubuntu-latest
-    outputs:
-      arch-map: ${{ steps.set-map.outputs.arch-map }}
-    steps:
-      - id: set-map
+      - name: Set Architecture Map
+        id: set-map
         run: |
-          if [[ "${{ github.repository_owner }}" == "canonical" ]]; then
-            echo 'arch-map={"amd64":["noble","X64","large"],"arm64":["noble","ARM64","large"]}' >> $GITHUB_OUTPUT
-          else
+          if [[ "${{ github.repository_owner }}" != "canonical" ]]; then
             echo 'arch-map={"amd64":["ubuntu-24.04"],"arm64":["ubuntu-24.04-arm"]}' >> $GITHUB_OUTPUT
           fi
 
-  # Why do we need this duplicate job and reusable Build-Rock workflow?
-  # - the Build-Rock wf may need an an environment setup that relies on an internal action
-  #   - to call an internal action, the repo must also be internal/private
-  #     - but the OCI Factory is not internal/private, so that internal action cannot be called from there
-  # build-internal:
-  #   needs: [get-runners, read-config]
-  #   if: github.event.repository.visibility != 'public'
-  #   strategy:
-  #     fail-fast: true
-  #     matrix: ${{ fromJSON(needs.read-config.outputs.build-matrix) }}
-  #   uses: canonical/oci-factory-internal/.github/workflows/Build-Rock.yaml@main
-  #   with:
-  #     rock-repo: ${{ github.repository }}
-  #     rock-repo-commit: ${{ github.ref }}
-  #     rockfile-directory: ${{ matrix.directory }}
-  #     oci-archive-name: ${{ matrix.artifact-name }}
-  #     arch-map: ${{ needs.get-runners.outputs.arch-map }}
-  #   secrets:
-  #     host-github-token: ${{ secrets.GITHUB_TOKEN }}
-  #     source-github-token: ${{ secrets.REPO_CLONER_TOKEN }}
+      # TODO: remove once the pro-feature is stable in rockcraft
+      # Warn the user if using tests in a pro enabled build
+      - name: Check Pro and Test Incompatibility
+        run: |
+          build_matrix='${{ steps.read-ci-config.outputs.build-matrix }}'
+
+          # Use jq to iterate over the 'include' array
+          echo "$build_matrix" | jq -c '.include[]' | while read -r row; do
+            directory=$(echo "$row" | jq -r '.["directory"] // "unknown"')
+            pro_services=$(echo "$row" | jq -r '.["pro-services"] // ""')
+            run_tests=$(echo "$row" | jq -r '.["run-tests"] // "false"')
+
+            if [[ -n "$pro_services" && "$run_tests" == "true" ]]; then
+              echo "::warning::Tests for Pro Services are currently not supported. Rockcraft tests will be skipped for ${directory}."
+            fi
+          done
+
 
   build:
-    needs: [get-runners, read-config]
-    if: github.event.repository.visibility == 'public'
+    needs: [prepare]
     strategy:
-      matrix: ${{ fromJSON(needs.read-config.outputs.build-matrix) }}
+      matrix: ${{ fromJSON(needs.prepare.outputs.build-matrix) }}
     uses: canonical/oci-factory/.github/workflows/Build-Rock.yaml@main
     with:
       rock-repo: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       rock-repo-commit: ${{ github.head_ref || github.ref_name }}
       rockfile-directory: ${{ matrix.directory }}
       oci-archive-name: ${{ matrix.artifact-name }}
-      arch-map: ${{ needs.get-runners.outputs.arch-map }}
+      arch-map: ${{ needs.prepare.outputs.arch-map }}
       rockcraft-test: ${{ matrix.run-tests }}
+      pro-services: ${{ matrix.pro-services }}
+    secrets:
+      source-github-token: ${{ secrets.REPO_CLONER_TOKEN }}
+      pro-token: ${{ secrets[matrix.pro-token] }}
+      pro-artifact-passphrase: ${{ secrets[matrix.pro-artifact-passphrase] }}
+
 
   test:
-    needs: [read-config, build]
-    # Uncomment these lines if using build-internal job and remove the line above
-    # needs: [read-config, build, build-internal] 
-    # if: |
-    #   always() && needs.read-config.result == 'success' &&
-    #   (needs.build-internal.result == 'success' && needs.build.result == 'skipped') ||
-    #   (needs.build-internal.result == 'skipped' && needs.build.result == 'success')
+    needs: [prepare, build]
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.read-config.outputs.build-matrix) }}
+      matrix: ${{ fromJSON(needs.prepare.outputs.build-matrix) }}
     uses: canonical/oci-factory/.github/workflows/Test-Rock.yaml@main
     with:
       oci-archive-name: ${{ matrix.artifact-name }}
+    secrets:
+      pro-artifact-passphrase: ${{ secrets[matrix.pro-artifact-passphrase] }}
+
 
   upload-ghcr:
-    needs: [read-config, test]
-    # Note: the !cancelled() is required to workaround the job being skipped
-    # due to a skipped job in the indirect dependency chain:
-    # https://github.com/orgs/community/discussions/25224
-    if: |
-      github.event_name != 'pull_request' && !cancelled() && !failure() &&
-      github.ref == 'refs/heads/main' &&
-      needs.read-config.outputs.ghcr-upload == 'true'
-    strategy:
-      matrix: ${{ fromJSON(needs.read-config.outputs.build-matrix) }}
-      fail-fast: false
+    needs: [prepare, test]
     runs-on: ubuntu-latest
+    if: |
+      needs.prepare.outputs.ghcr-upload == 'true' &&
+      github.event_name != 'pull_request' && 
+      github.ref == 'refs/heads/main'
+    strategy:
+      matrix: ${{ fromJSON(needs.prepare.outputs.build-matrix) }}
+      fail-fast: false
     permissions:
       packages: write
     steps:
+      - name: Pre-Check Pro Enabled Rocks
+        if: ${{ github.event.repository.visibility == 'public' && matrix.pro-services != '' }}
+        run: |
+          echo "::warning::Uploading Pro enabled rocks to GHCR is not allowed for public repositories."
+      
       - name: Upload Rock to GHCR
+        if: ${{ github.event.repository.visibility != 'public' || matrix.pro-services == '' }}
         uses: canonical/oci-factory/.github/actions/upload-rock@main
         with:
           artifact_name: ${{ matrix.artifact-name }}
@@ -112,20 +107,19 @@ jobs:
           registry: ghcr.io/${{ github.repository }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+          decrypt-passphrase: ${{ secrets[matrix.pro-artifact-passphrase] }}
+
 
   upload-registries:
-    needs: [read-config, test]
-    # Note: the !cancelled() is required to workaround the job being skipped
-    # due to a skipped job in the indirect dependency chain:
-    # https://github.com/orgs/community/discussions/25224
-    if: |
-      github.event_name != 'pull_request' && !cancelled() && !failure() &&
-      github.ref == 'refs/heads/main' &&
-      needs.read-config.outputs.upload-matrix != '{"include": []}'
-    strategy:
-      matrix: ${{ fromJSON(needs.read-config.outputs.upload-matrix) }}
-      fail-fast: false
+    needs: [prepare, test]
     runs-on: ubuntu-latest
+    if: |
+      needs.prepare.outputs.upload-matrix != '{"include": []}' &&
+      github.event_name != 'pull_request' && 
+      github.ref == 'refs/heads/main'
+    strategy:
+      matrix: ${{ fromJSON(needs.prepare.outputs.upload-matrix) }}
+      fail-fast: false
     steps:
       - name: Prepare ECR Session Token
         if: ${{ contains(matrix.registry-auth-method, 'ecr') }}
@@ -151,6 +145,7 @@ jobs:
           registry: ${{ matrix.registry-uri }}
           username: AWS
           password: ${{ steps.get-ecr-token.outputs.aws-session-token }}
+          decrypt-passphrase: ${{ secrets[matrix.pro-artifact-passphrase] }}
 
       - name: Upload Rock to Registry
         uses: canonical/oci-factory/.github/actions/upload-rock@main
@@ -162,4 +157,4 @@ jobs:
           registry: ${{ matrix.registry-uri }}
           username: ${{ secrets[matrix.registry-auth-username] }}
           password: ${{ secrets[matrix.registry-auth-password] }}
-
+          decrypt-passphrase: ${{ secrets[matrix.pro-artifact-passphrase] }}
