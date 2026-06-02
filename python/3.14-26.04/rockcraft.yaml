@@ -13,8 +13,7 @@ description: |
 license: Python-2.0
 base: bare
 
-# TODO: Use 26.04 once rockcraft supports it.
-build-base: devel
+build-base: ubuntu@26.04
 
 run-user: _daemon_
 
