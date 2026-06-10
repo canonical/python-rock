@@ -13,6 +13,8 @@ run-user: _daemon_
 platforms:
     amd64:
     arm64:
+    ppc64el:
+    s390x:
 
 parts:
     python3:
