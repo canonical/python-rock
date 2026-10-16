@@ -4,7 +4,7 @@ A distroless-like Python image based on Ubuntu.
 
 ## Chiselled image
 
-This image was created with [Chisel](https://documentation.ubuntu.com/chisel) to reduce the content of this image to only the essentials. This creates a more compact image with a smaller overall attack surface. Details on the content of this image can be found under the `python3.X_standard` slice(s) in the [chisel-releases](https://github.com/canonical/chisel-releasesl)
+This image was created with [Chisel](https://ubuntu.com/chisel/docs) to reduce the content of this image to only the essentials. This creates a more compact image with a smaller overall attack surface. Details on the content of this image can be found under the `python3.X_standard` slice(s) in the [chisel-releases](https://github.com/canonical/chisel-releasesl)
 repository.
 
 ## Available versions
