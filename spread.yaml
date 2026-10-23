@@ -1,4 +1,4 @@
-project: python-3.12-rock
+project: python:3.12-24.04
 
 backends:
   craft:
