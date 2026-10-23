@@ -13,7 +13,7 @@ description: |
 license: Python-2.0
 base: bare
 
-build-base: ubuntu@26.04
+build-base: devel
 
 run-user: _daemon_
 

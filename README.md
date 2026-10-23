@@ -9,10 +9,10 @@ repository.
 
 ## Available versions
 
-* [Python 3.8 (Ubuntu 20.04)](./python/3.8-20.04/rockcraft.yaml)
-* [Python 3.10 (Ubuntu 22.04)](./python/3.10-22.04/rockcraft.yaml)
-* [Python 3.11 (Ubuntu 22.04)](./python/3.11-22.04/rockcraft.yaml)
-* [Python 3.12 (Ubuntu 24.04)](./python/3.12-24.04/rockcraft.yaml)
-* [Python 3.13 (Ubuntu 25.04)](./python/3.13-25.04/rockcraft.yaml)
-* [Python 3.13 (Ubuntu 25.10)](./python/3.13-25.10/rockcraft.yaml)
-* [Python 3.14 (Ubuntu 26.04)](./python/3.14-26.04/rockcraft.yaml)
+* [Python 3.8 (Ubuntu 20.04)](https://github.com/canonical/python-rock/tree/3.8-20.04)
+* [Python 3.10 (Ubuntu 22.04)](https://github.com/canonical/python-rock/tree/3.10-22.04)
+* [Python 3.11 (Ubuntu 22.04)](https://github.com/canonical/python-rock/tree/3.11-22.04)
+* [Python 3.12 (Ubuntu 24.04)](https://github.com/canonical/python-rock/tree/3.12-24.04)
+* [Python 3.13 (Ubuntu 25.04)](https://github.com/canonical/python-rock/tree/3.13-25.04)
+* [Python 3.13 (Ubuntu 25.10)](https://github.com/canonical/python-rock/tree/3.13-25.10)
+* [Python 3.14 (Ubuntu 26.04)](https://github.com/canonical/python-rock/tree/3.14-26.04)

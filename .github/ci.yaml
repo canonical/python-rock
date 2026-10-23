@@ -22,13 +22,22 @@ registries:
   #         password: secrets.AWS_SECRET_ACCESS_KEY       # @@@@@@ DO NOT PUT ACTUAL CREDENTIALS HERE @@@@@@
 
 images:
-  - directory: "python/3.10-22.04"
-  - directory: "python/3.12-24.04"
-  - directory: "python/3.13-25.10"
-  - directory: "python/3.14-26.04"
+  - directory: "."
 
   ## Example of specifying different registries for a specific rock
   # - directory: "my-rock-name/0.1-24.04"
   #   registries:
   #     - docker.io
   #     - rocksdev-ecr-public
+
+  ## Example of specifying pro-services with custom config
+  # - directory: "my-rock-name/0.1-24.04"
+  #   pro:
+  #     services:
+  #       - esm-apps
+  #       - esm-infra
+  #     config:
+  #       token: secrets.MY_PRO_TOKEN                    # @@@@@@ DO NOT PUT ACTUAL CREDENTIALS HERE @@@@@@
+  #       artifact-passphrase: secrets.MY_PASSPHRASE     # @@@@@@ DO NOT PUT ACTUAL CREDENTIALS HERE @@@@@@
+  #   registries:
+  #   ...

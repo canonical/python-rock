@@ -1,0 +1,14 @@
+name: Threat monitor
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 1 * * *"
+
+jobs:
+  security:
+    uses: canonical/rocks-actions/.github/workflows/Security.yaml@37b3cb639e19b045baf571b8273f6a2f54a645c1 # v1.4.1
+    secrets: inherit
+    permissions:
+      contents: read
+      packages: read
