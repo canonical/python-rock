@@ -1,4 +1,4 @@
-project: python-3.13-rock
+project: python:3.13-25.10
 backends:
   craft:
     type: craft
