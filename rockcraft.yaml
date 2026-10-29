@@ -13,7 +13,8 @@ description: |
 license: Python-2.0
 base: bare
 
-build-base: ubuntu@26.10
+# TODO: Update once 26.10 is stabilized
+build-base: devel
 
 run-user: _daemon_
 
@@ -26,12 +27,27 @@ platforms:
 parts:
   python3:
     plugin: nil
-    stage-packages:
-      - base-files_base
-      - base-files_release-info 
-      - base-files_chisel 
-      - ca-certificates_data 
-      - libc6_libs 
-      - libgcc-s1_libs 
-      - openssl_config 
-      - python3_standard
+
+    # TODO: Uncomment once 26.10 is stabilized
+    # stage-packages:
+    #   - base-files_base
+    #   - base-files_release-info 
+    #   - base-files_chisel 
+    #   - ca-certificates_data 
+    #   - libc6_libs 
+    #   - libgcc-s1_libs 
+    #   - openssl_config 
+    #   - python3_standard
+
+    # TODO: Remove once 26.10 is stabilized
+    override-build: |
+      craftctl default
+      chisel cut --release ubuntu-26.10 --root ${CRAFT_PART_INSTALL} \
+        base-files_base \
+        base-files_release-info \
+        ca-certificates_data \
+        libc6_libs \
+        libgcc-s1_libs \
+        openssl_config \
+        python3_standard
+
