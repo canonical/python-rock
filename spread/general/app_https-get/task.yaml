@@ -1,6 +1,6 @@
-summary: test python 3.14 with 26.04 base - https get
+summary: test python 3.14 with 26.10 base - https get
 
 execute: |
-  docker run --rm -v "$PWD/src":/src:ro python:devel \
+  docker run --rm -v "$PWD/src":/src:ro python:3.14-26.10 \
     exec -IT python3 /src/main.py | \
     grep "200 OK"

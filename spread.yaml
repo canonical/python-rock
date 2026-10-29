@@ -1,4 +1,4 @@
-project: python:devel
+project: python:3.14-26.10
 backends:
   craft:
     type: craft
@@ -22,10 +22,10 @@ suites:
       sudo apt remove --yes retry
 
       # Load the rock into docker
-      sudo rockcraft.skopeo --insecure-policy copy "oci-archive:$CRAFT_ARTIFACT" docker-daemon:python:devel
+      sudo rockcraft.skopeo --insecure-policy copy "oci-archive:$CRAFT_ARTIFACT" docker-daemon:python:3.14-26.10
 
     restore: |
-      docker image rm --force python:devel
+      docker image rm --force python:3.14-26.10
 
 exclude:
   - .git
